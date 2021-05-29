@@ -73,7 +73,7 @@ public class treeload {
 			
 			key = line.substring(0,keyLength); //extract key upto the specified keyLength from each line to insert in the index file
 			insertRecord(root,key, offset); // insert each new key offset pair of the record read from input file to the index file
-			offset += line.length() + 2; //add 2 to each offset after adding line.length() for "\n" i.e. newline charaters
+			offset += line.length() + 2; //add 2 to each offset after adding line.length() for "\n"
 		}
 		reader.close(); 
 		writefile(keyLength, inputFile, indexFile);
