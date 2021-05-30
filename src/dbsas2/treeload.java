@@ -55,10 +55,10 @@ public class treeload {
 	 * @param indexFile : path where the index file needs to be generated
 	 * @param keyLength : length of the key to be considered while preparing the index file
 	 * */
-	public static void createIndex(String inputFile, String indexFile, int keyLength) throws IOException{
+	public static void createIndex(String inputFile, String indexFile) throws IOException{
 		
 		long offset = 1;// to calculate the offset of the records in the text input file
-		MaxBlockSize = (1024 - keyLength) / keyLength + 8 ; // assuming each block of 1024 bytes and offset of long data type, hence 8 bytes
+		MaxBlockSize = (1024 - 24) / 24 + 8 ; // assuming each block of 1024 bytes and offset of long data type, hence 8 bytes
 		splitIndex = (MaxBlockSize%2==0)?(MaxBlockSize/2)-1 : MaxBlockSize/2;
 		
 		//read the input heap file
@@ -71,12 +71,12 @@ public class treeload {
 		while((line = reader.readLine()) != null){ //read each line of the input text file
 			
 			
-			key = line.substring(0,keyLength); //extract key upto the specified keyLength from each line to insert in the index file
+			key = line.substring(0,24); //extract key up to the specified keyLength from each line to insert in the index file
 			insertRecord(root,key, offset); // insert each new key offset pair of the record read from input file to the index file
 			offset += line.length() + 2; //add 2 to each offset after adding line.length() for "\n"
 		}
 		reader.close(); 
-		writefile(keyLength, inputFile, indexFile);
+		writefile( inputFile, indexFile);
 	
 	}
 	
@@ -87,10 +87,10 @@ public class treeload {
 	 * @param indexfilepath : path where the index file needs to be generated
 	 * @param key : length of the key to be considered while preparing the index file
 	 * */
-	private static void writefile(int key, String datafilepath, String indexfilepath) throws IOException {
+	private static void writefile( String datafilepath, String indexfilepath) throws IOException {
 		FileOutputStream fout = new FileOutputStream(indexfilepath);
 		byte[] inputFileName = datafilepath.getBytes();
-		byte[] keyLength = (key+"").getBytes();
+		byte[] keyLength = (24+"").getBytes();
 		byte[] rootOffset = (" " + root.key.get(0)).getBytes();
 		FileChannel fc = fout.getChannel();
 		fc.write(ByteBuffer.wrap(inputFileName));//write the input text file name from 0-255 bytes
@@ -363,7 +363,7 @@ public class treeload {
         
         
         int keyLength = 24;
-        long offset = 1;// to calculate the offset of the records in the text input file
+        long offset = constants.TOTAL_SIZE - 24;// to calculate the offset of the records in the text input file
 		MaxBlockSize = (1024 - keyLength) / keyLength + 8 ; // assuming each block of 1024 bytes and offset of long data type, hence 8 bytes
 		splitIndex = (MaxBlockSize%2==0)?(MaxBlockSize/2)-1 : MaxBlockSize/2;
         
@@ -453,7 +453,7 @@ public class treeload {
                         
             			
                         String key = new String(sdtnameBytes); //extract key upto the specified keyLength from each line to insert in the index file
-            			insertRecord(root,key, 24); // insert each new key offset pair of the record read from input file to the index file
+            			insertRecord(root,key, constants.TOTAL_SIZE - 24); // insert each new key offset pair of the record read from input file to the index file
             			//offset += line.length() + 2; //add 2 to each offset after adding line.length() for "\n" i.e. newline charaters
             			offset += constants.COUNTS_OFFSET + 4;
                         // Write bytes to data output stream
@@ -478,7 +478,7 @@ public class treeload {
                 
              
             }
-            writefile(keyLength, datafile, outputFileName);
+            writefile( datafile, outputFileName);
 
             finishTime = System.nanoTime();
         }

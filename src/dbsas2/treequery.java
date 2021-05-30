@@ -3,8 +3,10 @@ package dbsas2;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -47,7 +49,7 @@ public class treequery {
 	 * @param insertFind : flag to find the record but not print the result in console
 	 * @return : 0 if record not found and 1 if record found
 	 * */
-	public static int listRecords(String indexFile, String key, int numOfRecords,BPlusTree block, boolean insertFind) throws IOException, ClassNotFoundException{
+	public static int listRecords(String indexFile, String key, BPlusTree block, boolean insertFind) throws IOException, ClassNotFoundException{
 		
 		String[] metaData = getMetaData(indexFile);
 		
@@ -66,12 +68,12 @@ public class treequery {
 			key = key.substring(0, keyLength);
 		}
 		
-		int recordsListed = 1;//counter to count the number of records listed
+		int recordsListed = 0;//counter to count the number of records listed
 		
 		for(int i = 0;i<block.key.size();i++){
 			if(!block.isLeafBlock){
 				if(key.compareTo(block.key.get(i))<0){
-					return listRecords(indexFile, key, numOfRecords, block.blockPtr.get(i),insertFind);
+					return listRecords(indexFile, key,  block.blockPtr.get(i),insertFind);
 					 
 				}
 				else{
@@ -81,7 +83,7 @@ public class treequery {
 
 					else if (i == block.key.size() - 1) {
 						if (!block.isLeafBlock && block.blockPtr.get(i + 1) != null) {
-							return listRecords(indexFile, key, numOfRecords,block.blockPtr.get(i + 1),insertFind);
+							return listRecords(indexFile, key, block.blockPtr.get(i + 1),insertFind);
 						}
 					}
 				}
@@ -93,12 +95,10 @@ public class treequery {
 					if(!insertFind){
 						System.out.println("Given key doesn't exist.");
 					}
-					if(numOfRecords==1){
-						return 0;
-					}
+					
 					
 				}
-				while(block!=null && recordsListed<=numOfRecords){
+				while(block!=null){
 					for(int j = 0;j<block.key.size();j++){
 						if(key.compareTo(block.key.get(j))>0){
 							if (j < block.key.size() - 1) {
@@ -116,9 +116,7 @@ public class treequery {
 								readTextFileRecord(textFileName, offsetVal);
 							}
 							
-							if(recordsListed == numOfRecords){
-								return 1;
-							}
+							
 							recordsListed++;
 						}
 					}
@@ -130,10 +128,28 @@ public class treequery {
 	}
 	
 	/**
-	 * To read records from the input text file using the offset read from the generated index file 
+	 * Helper function to fetch the root block from the generated index file
 	 *
-	 * @param textFileName : path of the input text file
-	 * @param offsetVal : offset of the required record to be read from the input text file
+	 * @param indexFile : path where the index file is generated
+	 * @return the root block
+	 * */
+	public static BPlusTree getRoot(String indexFile) throws IOException, ClassNotFoundException{
+		
+		FileInputStream fin = new FileInputStream(indexFile);
+		FileChannel fc = fin.getChannel();
+		fc.position(1025l);// root block starts from 1025th byte as first 1024 bytes reserved for storing metadata
+		ObjectInputStream ois = new ObjectInputStream(fin);
+		BPlusTree root = (BPlusTree) ois.readObject();
+		ois.close();
+		
+		return root;
+	}
+	
+	/**
+	 * To read records from the input tree load file using the offset read from the generated index file 
+	 *
+	 * @param textFileName : path of the input tree load file
+	 * @param offsetVal : offset of the required record to be read from the input tree load file
 	 * */
 	public static void readTextFileRecord(String textFileName, long offsetVal) throws IOException{
 		
@@ -145,7 +161,7 @@ public class treequery {
 		textFile.close();
 	}
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args) throws IOException, ClassNotFoundException {
 		// TODO Auto-generated method stub
 		// check for correct number of arguments
         if (args.length != constants.DBQUERY_ARG_COUNT) {
@@ -159,91 +175,17 @@ public class treequery {
         String datafile = "tree." + pageSize;
         long startTime = 0;
         long finishTime = 0;
-        int numBytesInOneRecord = constants.TOTAL_SIZE;
-        int numBytesInSdtnameField = constants.STD_NAME_SIZE;
-        int numBytesIntField = Integer.BYTES;
-        int numRecordsPerPage = pageSize/numBytesInOneRecord;
-        SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy hh:mm:ss a");
-        byte[] page = new byte[pageSize];
+        
         FileInputStream inStream = null;
         
         try {
             inStream = new FileInputStream(datafile);
-            int numBytesRead = 0;
+            
             startTime = System.nanoTime();
-            // Create byte arrays for each field
-            byte[] sdtnameBytes = new byte[numBytesInSdtnameField];
-            byte[] idBytes = new byte[constants.ID_SIZE];
-            byte[] dateBytes = new byte[constants.DATE_SIZE];
-            byte[] yearBytes = new byte[constants.YEAR_SIZE];
-            byte[] monthBytes = new byte[constants.MONTH_SIZE];
-            byte[] mdateBytes = new byte[constants.MDATE_SIZE];
-            byte[] dayBytes = new byte[constants.DAY_SIZE];
-            byte[] timeBytes = new byte[constants.TIME_SIZE];
-            byte[] sensorIdBytes = new byte[constants.SENSORID_SIZE];
-            byte[] sensorNameBytes = new byte[constants.SENSORNAME_SIZE];
-            byte[] countsBytes = new byte[constants.COUNTS_SIZE];
+            // list all records which has the key in index file
+            listRecords(datafile, text,getRoot(datafile),false);
 
-            // until the end of the binary file is reached
-            while ((numBytesRead = inStream.read(page)) != -1) {
-                // Process each record in page
-                for (int i = 0; i < numRecordsPerPage; i++) {
-
-                    // Copy record's SdtName (field is located at multiples of the total record byte length)
-                    System.arraycopy(page, (i*numBytesInOneRecord), sdtnameBytes, 0, numBytesInSdtnameField);
-
-                    // Check if field is empty; if so, end of all records found (packed organisation)
-                    if (sdtnameBytes[0] == 0) {
-                        // can stop checking records
-                        break;
-                    }
-
-                    // Check for match to "text"
-                    String sdtNameString = new String(sdtnameBytes);
-                    String sFormat = String.format("(.*)%s(.*)", text);
-                    // if match is found, copy bytes of other fields and print out the record
-                    if (sdtNameString.matches(sFormat)) {
-                        /*
-                         * Fixed Length Records (total size = 112 bytes):
-                         * SDT_NAME field = 24 bytes, offset = 0
-                         * id field = 4 bytes, offset = 24
-                         * date field = 8 bytes, offset = 28
-                         * year field = 4 bytes, offset = 36
-                         * month field = 9 bytes, offset = 40
-                         * mdate field = 4 bytes, offset = 49
-                         * day field = 9 bytes, offset = 53
-                         * time field = 4 bytes, offset = 62
-                         * sensorid field = 4 bytes, offset = 66
-                         * sensorname field = 38 bytes, offset = 70
-                         * counts field = 4 bytes, offset = 108
-                         *
-                         * Copy the corresponding sections of "page" to the individual field byte arrays
-                         */
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.ID_OFFSET), idBytes, 0, numBytesIntField);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.DATE_OFFSET), dateBytes, 0, constants.DATE_SIZE);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.YEAR_OFFSET), yearBytes, 0, numBytesIntField);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.MONTH_OFFSET), monthBytes, 0, constants.MONTH_SIZE);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.MDATE_OFFSET), mdateBytes, 0, numBytesIntField);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.DAY_OFFSET), dayBytes, 0, constants.DAY_SIZE);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.TIME_OFFSET), timeBytes, 0, numBytesIntField);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.SENSORID_OFFSET), sensorIdBytes, 0, numBytesIntField);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.SENSORNAME_OFFSET), sensorNameBytes, 0, constants.SENSORNAME_SIZE);
-                        System.arraycopy(page, ((i*numBytesInOneRecord) + constants.COUNTS_OFFSET), countsBytes, 0, numBytesIntField);
-
-                        // Convert long data into Date object
-                        Date date = new Date(ByteBuffer.wrap(dateBytes).getLong());
-
-                        // Get a string representation of the record for printing to stdout
-                        String record = sdtNameString.trim() + "," + ByteBuffer.wrap(idBytes).getInt()
-                                + "," + dateFormat.format(date) + "," + ByteBuffer.wrap(yearBytes).getInt() +
-                                "," + new String(monthBytes).trim() + "," + ByteBuffer.wrap(mdateBytes).getInt()
-                                + "," + new String(dayBytes).trim() + "," + ByteBuffer.wrap(timeBytes).getInt()
-                                + "," + ByteBuffer.wrap(sensorIdBytes).getInt() + "," +
-                                new String(sensorNameBytes).trim() + "," + ByteBuffer.wrap(countsBytes).getInt();
-                        System.out.println(record);
-                    }
-                }
-            }
+            
 
             finishTime = System.nanoTime();
         }

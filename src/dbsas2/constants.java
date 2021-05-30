@@ -1,6 +1,6 @@
 package dbsas2;
 public class constants{
-    public static final int DBLOAD_ARG_COUNT = 3;
+    public static final int DBLOAD_ARG_COUNT = 1;
     public static final int DBQUERY_ARG_COUNT = 2;
 
     public static final int DBLOAD_PAGE_SIZE_ARG = 1;
